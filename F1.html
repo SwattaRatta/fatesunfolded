@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fates Unfolded</title>
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            background-color: #f4e8d1;
+            color: #4a3c31;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        #game-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fffaf0;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #6d8299;
+        }
+        #tension-bar {
+            width: 80%;
+            height: 25px;
+            background: #e0d8c3;
+            margin: 15px auto;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        #tension-fill {
+            height: 100%;
+            background: linear-gradient(to right, #e57373, #d32f2f);
+            width: 0;
+            transition: width 0.5s ease;
+        }
+        #status {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 5px;
+            background: #6d8299;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #4a5e72;
+        }
+        #choices, #event {
+            margin: 20px 0;
+        }
+        #story-log {
+            text-align: left;
+            margin-top: 20px;
+            max-height: 250px;
+            overflow-y: auto;
+            background: #f9f1e3;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #e0d8c3;
+        }
+        #story-log p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Fates Unfolded</h1>
+        <div id="status">
+            Turn: <span id="turn">1</span>/7 | Tension: <span id="tension">20</span>
+        </div>
+        <div id="tension-bar"><div id="tension-fill"></div></div>
+        <div id="choices"></div>
+        <div id="event"></div>
+        <div id="story-log"></div>
+    </div>
+
+    <script>
+        // Game State
+        let gameState = {
+            turn: 1,
+            tension: 20,
+            maxTension: 100,
+            story: [],
+            categories: {
+                Domain: ["Metropolis", "Wilderness", "Stronghold", "Wanderer"],
+                Pursuit: ["Creator", "Conqueror", "Seeker", "Guardian"],
+                Bonds: ["Soulmate", "Kin", "Ally", "Nemesis"],
+                Mark: ["Innovation", "Power", "Harmony", "Enigma"],
+                Reckoning: ["Ruin", "Revelation", "Rivalry", "Redemption"]
+            },
+            chosen: {}
+        };
+
+        // Tension Payoffs (Game Theory-Inspired)
+        const tensionValues = {
+            "Metropolis": 10, "Wilderness": -5, "Stronghold": 5, "Wanderer": 0,
+            "Creator": 5, "Conqueror": 20, "Seeker": 0, "Guardian": 10,
+            "Soulmate": -10, "Kin": 0, "Ally": 5, "Nemesis": 15,
+            "Innovation": -5, "Power": 10, "Harmony": -15, "Enigma": 5,
+            "Ruin": 30, "Revelation": 10, "Rivalry": 20, "Redemption": -10
+        };
+
+        // Fate Events
+        const fateEvents = [
+            { text: "A storm ravages your path!", options: ["Endure (+10)", "Flee (-5)"], tension: [10, -5] },
+            { text: "A rival challenges your mark!", options: ["Confront (+15)", "Ignore (0)"], tension: [15, 0] },
+            { text: "A stranger offers aid!", options: ["Accept (-10)", "Decline (+5)"], tension: [-10, 5] },
+            { text: "A secret unravels!", options: ["Embrace (+10)", "Bury (-5)"], tension: [10, -5] }
+        ];
+
+        // Initialize Game
+        function startGame() {
+            Object.keys(gameState.categories).forEach(category => {
+                const options = gameState.categories[category];
+                gameState.chosen[category] = options[0];
+                updateTension(tensionValues[options[0]]);
+            });
+            updateStory("Your fate begins: " + Object.values(gameState.chosen).join(", ") + ".");
+            renderChoices();
+            renderEvent();
+        }
+
+        // Update Tension
+        function updateTension(amount) {
+            gameState.tension = Math.max(0, Math.min(gameState.maxTension, gameState.tension + amount));
+            document.getElementById("tension").textContent = gameState.tension;
+            document.getElementById("tension-fill").style.width = `${(gameState.tension / gameState.maxTension) * 100}%`;
+            checkGameOver();
+        }
+
+        // Render Choices
+        function renderChoices() {
+            const choicesDiv = document.getElementById("choices");
+            choicesDiv.innerHTML = "<h3>Weave Your Fate</h3>";
+            Object.keys(gameState.categories).forEach(category => {
+                const btn = document.createElement("button");
+                btn.textContent = `${category}: ${gameState.chosen[category]}`;
+                btn.onclick = () => expandCategory(category);
+                choicesDiv.appendChild(btn);
+            });
+        }
+
+        // Expand Category
+        function expandCategory(category) {
+            const options = gameState.categories[category];
+            const current = gameState.chosen[category];
+            const nextIndex = (options.indexOf(current) + 1) % options.length;
+            const newChoice = options[nextIndex];
+            const tensionChange = tensionValues[newChoice] - tensionValues[current];
+            gameState.chosen[category] = newChoice;
+            updateTension(tensionChange);
+            updateStory(`You weave ${category} into ${newChoice}.`);
+            nextTurn();
+        }
+
+        // Render Event
+        function renderEvent() {
+            const eventDiv = document.getElementById("event");
+            eventDiv.innerHTML = "";
+            if (gameState.turn > 1) {
+                const event = fateEvents[Math.floor(Math.random() * fateEvents.length)];
+                eventDiv.innerHTML = `<p>${event.text}</p>`;
+                event.options.forEach((opt, i) => {
+                    const btn = document.createElement("button");
+                    btn.textContent = opt;
+                    btn.onclick = () => {
+                        updateTension(event.tension[i]);
+                        updateStory(`Fate shifts: ${event.text} You ${opt.split(" ")[0].toLowerCase()}.`);
+                        eventDiv.innerHTML = "";
+                    };
+                    eventDiv.appendChild(btn);
+                });
+            }
+        }
+
+        // Update Story
+        function updateStory(entry) {
+            gameState.story.push(entry);
+            const log = document.getElementById("story-log");
+            log.innerHTML = gameState.story.map(line => `<p>${line}</p>`).join("");
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Next Turn
+        function nextTurn() {
+            gameState.turn++;
+            document.getElementById("turn").textContent = gameState.turn;
+            if (gameState.turn <= 7) {
+                renderChoices();
+                renderEvent();
+            } else {
+                endGame();
+            }
+        }
+
+        // Check Game Over
+        function checkGameOver() {
+            if (gameState.tension >= gameState.maxTension) {
+                endGame("Your fate collapses under unbearable tension!");
+            } else if (gameState.tension <= 0) {
+                endGame("Your fate fades into lifeless stillness.");
+            }
+        }
+
+        // End Game
+        function endGame(message = null) {
+            const container = document.getElementById("game-container");
+            container.innerHTML = `
+                <h2>Your Fate is Sealed</h2>
+                <p>${message || "Your tapestry is woven: " + Object.values(gameState.chosen).join(", ") + "."}</p>
+                <p>Final Tension: ${gameState.tension}</p>
+                <button onclick="location.reload()">Weave Again</button>
+            `;
+        }
+
+        // Start Game
+        startGame();
+    </script>
+</body>
+</html>
